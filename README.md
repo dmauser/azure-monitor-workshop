@@ -23,6 +23,7 @@ New here? **Start with the [Hands-On Lab Guide](docs/hands-on-lab.md)** — the 
 | Guide | What it covers |
 | --- | --- |
 | **[Hands-On Lab Guide](docs/hands-on-lab.md)** | The complete end-to-end lab — workspace → policy → VM/app → golden-signals workbook → SLO alert, with exact commands, KQL, and verification (maps to deck slide 31). |
+| **[Scenario Walkthroughs](docs/scenario-walkthroughs.md)** | A guided tour of each of the five telemetry scenarios — what it simulates, sample KQL, golden-signal queries, and how to inject the built-in anomaly to fire an alert. |
 
 ### 🧭 Feature Walkthroughs
 
@@ -95,6 +96,8 @@ Log Analytics Workspace  (queryable via KQL / Workbooks / Alerts)
 | **AKS / Containers** | `AKS_CL` | Node/pod CPU/mem, restarts, CrashLoopBackOff, PV usage, control-plane |
 | **Azure SQL** | `AzureSQL_CL` | DTU/vCore %, connections, deadlocks, storage %, query duration |
 | **Applications (APM)** | `APM_CL` | Golden signals: rate, errors, latency P50/P95/P99, dependencies, traces |
+
+> 📘 **New:** step-by-step [**Scenario Walkthroughs**](docs/scenario-walkthroughs.md) — explore each table, run the golden-signal KQL, and inject the built-in anomaly to trigger an alert.
 
 ---
 
