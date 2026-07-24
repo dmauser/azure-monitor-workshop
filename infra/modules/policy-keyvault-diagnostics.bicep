@@ -58,7 +58,7 @@ resource policyAssignment 'Microsoft.Authorization/policyAssignments@2024-04-01'
   }
   properties: {
     displayName: 'Deploy diagnostic settings for Key Vault to Log Analytics (lab)'
-    description: 'Auto-configures diagnostic settings on Key Vaults in this resource group to send logs to the azure-monitor-lab workspace. Demonstrates Azure Policy DeployIfNotExists governance.'
+    description: 'Auto-configures diagnostic settings on Key Vaults in this resource group to send logs to the azure-monitor-workshop workspace. Demonstrates Azure Policy DeployIfNotExists governance.'
     policyDefinitionId: policyDefinitionId
     enforcementMode: 'Default'
     parameters: {

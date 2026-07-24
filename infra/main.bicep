@@ -2,7 +2,7 @@
 // infra/main.bicep
 // Scope: subscription
 //
-// Entry point for the azure-monitor-lab infrastructure.
+// Entry point for the azure-monitor-workshop infrastructure.
 // Provisions:
 //   - Resource Group
 //   - Log Analytics Workspace
@@ -65,7 +65,7 @@ var workspaceName = 'law-${namePrefix}-${uniqueSuffix}'
 var dceName       = 'dce-${namePrefix}-${uniqueSuffix}'
 
 var commonTags = {
-  project: 'azure-monitor-lab'
+  project: 'azure-monitor-workshop'
   environment: 'lab'
   managedBy: 'bicep'
 }

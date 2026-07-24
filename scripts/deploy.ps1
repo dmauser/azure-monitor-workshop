@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.1
-# scripts/deploy.ps1 — deploy azure-monitor-lab infrastructure to Azure.
+#Requires -Version 5.1
+# scripts/deploy.ps1 — deploy azure-monitor-workshop infrastructure to Azure.
 #
 # Usage:
 #   .\scripts\deploy.ps1 [-SubscriptionId <id>] [-PrincipalId <oid>]

@@ -53,7 +53,7 @@ param uid string = take(uniqueString(resourceGroup().id, 'vmguest'), 6)
 
 @description('Resource tags applied to every resource in this module')
 param tags object = {
-  lab: 'azure-monitor-lab'
+  lab: 'azure-monitor-workshop'
   module: 'demo-vm'
   managedBy: 'bicep'
 }

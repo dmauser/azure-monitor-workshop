@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/teardown.sh — delete the azure-monitor-lab resource group and clean up.
+# scripts/teardown.sh — delete the azure-monitor-workshop resource group and clean up.
 #
 # Usage:
 #   ./scripts/teardown.sh [--force] [--subscription <id>] [--resource-group <rg>]

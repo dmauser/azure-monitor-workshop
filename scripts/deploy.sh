@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/deploy.sh — deploy azure-monitor-lab infrastructure to Azure.
+# scripts/deploy.sh — deploy azure-monitor-workshop infrastructure to Azure.
 #
 # Usage:
 #   ./scripts/deploy.sh [--subscription <id>] [--principal-id <oid>]

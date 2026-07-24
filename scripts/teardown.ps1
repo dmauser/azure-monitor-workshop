@@ -1,5 +1,5 @@
-﻿#Requires -Version 5.1
-# scripts/teardown.ps1 — delete the azure-monitor-lab resource group and clean up.
+#Requires -Version 5.1
+# scripts/teardown.ps1 — delete the azure-monitor-workshop resource group and clean up.
 #
 # Usage:
 #   .\scripts\teardown.ps1 [-Force] [-SubscriptionId <id>] [-ResourceGroup <rg>]

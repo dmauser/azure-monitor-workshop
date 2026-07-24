@@ -1,4 +1,4 @@
-"""main.py — CLI entry point for the azure-monitor-lab telemetry generator.
+"""main.py — CLI entry point for the azure-monitor-workshop telemetry generator.
 
 Usage examples::
 
@@ -199,7 +199,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     loop_mode: bool = args.loop
 
     print(
-        f"azure-monitor-lab generator  "
+        f"azure-monitor-workshop generator  "
         f"[{'dry-run' if args.dry_run else 'LIVE'}]  "
         f"scenarios={scenarios}  "
         f"backfill={args.backfill_minutes}min  "
