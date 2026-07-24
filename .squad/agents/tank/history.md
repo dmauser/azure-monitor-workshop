@@ -1,7 +1,7 @@
 # Tank — History
 
 ## Seed Context
-- **Project:** azure-monitor-lab (requested by Daniel Mauser / @dmauser).
+- **Project:** azure-monitor-workshop (requested by Daniel Mauser / @dmauser).
 - **My scope:** per-scenario custom tables + DCRs + DCE + LA workspace + workbook/alert modules + alerts/*.alerts.bicep + deploy/validate/teardown scripts (bash + pwsh).
 - **Ingestion path:** generator → DCE Logs Ingestion endpoint → DCR stream `Custom-<Scenario>_CL` → transformKql → `<Scenario>_CL` table.
 - **Scenarios (deck slides 34–38):** virtual-machines, app-service, aks, azure-sql, apm. Signals/alerts per team.md Project Context.

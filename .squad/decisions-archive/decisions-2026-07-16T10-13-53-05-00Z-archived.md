@@ -135,7 +135,7 @@ No regressions.  All 5 scenarios, all anomaly/baseline combinations pass.
 ## 1. CLI Contract
 
 Entry point: `generator/main.py`  
-Run from repo root with `PYTHONPATH=F:\Temp\azure-monitor-lab` set.
+Run from repo root with `PYTHONPATH=C:\path\to\azure-monitor-workshop` set.
 
 ```
 python generator/main.py [OPTIONS]
@@ -156,7 +156,7 @@ python generator/main.py [OPTIONS]
 
 **Dry-run hermetic invocation** (no Azure credentials required):
 ```powershell
-$env:PYTHONPATH = "F:\Temp\azure-monitor-lab"
+$env:PYTHONPATH = "C:\path\to\azure-monitor-workshop"
 python generator/main.py --scenario all --dry-run --backfill-minutes 5 --seed 42
 ```
 
@@ -285,13 +285,13 @@ All scripts:
 
 ### seed (PowerShell — primary)
 ```powershell
-cd F:\Temp\azure-monitor-lab
+cd C:\path\to\azure-monitor-workshop
 .\scripts\seed.ps1
 ```
 
 ### seed (Bash)
 ```bash
-cd /path/to/azure-monitor-lab
+cd /path/to/azure-monitor-workshop
 bash scripts/seed.sh
 ```
 
@@ -561,7 +561,7 @@ $t | Add-Member -NotePropertyName 'TableName' -NotePropertyValue $tn
 
 ```powershell
 # From repo root — no PYTHONPATH required (conftest.py sets sys.path automatically)
-cd F:\Temp\azure-monitor-lab
+cd C:\path\to\azure-monitor-workshop
 C:\Users\<user>\AppData\Local\Programs\Python\Python312\python.exe -m pytest tests/ -q
 ```
 
@@ -714,7 +714,7 @@ The existing `README.md` already references `docs/` generically on line 102 (`Se
 
 ## Purpose
 
-This document is the **single source of truth** for the per-scenario custom table schemas used by the azure-monitor-lab. Every column name, type, and semantic defined here must be reflected exactly in:
+This document is the **single source of truth** for the per-scenario custom table schemas used by the azure-monitor-workshop. Every column name, type, and semantic defined here must be reflected exactly in:
 
 1. **Tank's DCR/table definitions** — `outputStream` column declarations in Bicep/JSON
 2. **Dozer's generator models** — Python dataclass / Pydantic fields that emit rows to the DCE endpoint

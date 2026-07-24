@@ -1,7 +1,7 @@
 # Mouse — History (Summarized)
 
 ## Seed Context
-- **Project:** azure-monitor-lab (Daniel Mauser / @dmauser).
+- **Project:** azure-monitor-workshop (Daniel Mauser / @dmauser).
 - **Scope:** KQL, Workbooks JSON, docs, README, PPTX slides.
 - **Deliverables:** 6 workbook JSONs + 5 KQL query sets + 4 design docs + 5 demo slides (39-43) + 2 observability/cost slides (44-45) + walkthrough doc.
 

@@ -1,6 +1,6 @@
 # Project Context
 
-- **Project:** azure-monitor-lab
+- **Project:** azure-monitor-workshop
 - **Created:** 2026-07-16
 
 ## Core Context

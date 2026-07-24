@@ -1,6 +1,6 @@
 # Squad Team
 
-> azure-monitor-lab
+> azure-monitor-workshop
 
 ## Coordinator
 
@@ -22,7 +22,7 @@
 
 ## Project Context
 
-- **Project:** azure-monitor-lab — Azure Monitor Observability Demo Lab
+- **Project:** azure-monitor-workshop — Azure Monitor Observability Demo Lab
 - **Requested by:** Daniel Mauser (@dmauser)
 - **Created:** 2026-07-15
 - **Universe:** The Matrix

@@ -1,7 +1,7 @@
 # Dozer — History
 
 ## Seed Context
-- **Project:** azure-monitor-lab (requested by Daniel Mauser / @dmauser).
+- **Project:** azure-monitor-workshop (requested by Daniel Mauser / @dmauser).
 - **My scope:** the Python telemetry generator + 5 scenario emitters + CLI.
 - **Auth:** DefaultAzureCredential via azure-identity; upload via azure-monitor-ingestion LogsIngestionClient.
 - **Scenarios (deck slides 34–38):** VM, App Service, AKS, Azure SQL, APM — each with baseline metrics + injectable alert-triggering anomalies.
@@ -11,7 +11,7 @@
 
 ### 2026-07-15 — gen-foundation + gen-scenarios complete
 
-**Module layout** (`F:\Temp\azure-monitor-lab\generator\`):
+**Module layout** (`C:\path\to\azure-monitor-workshop\generator\`):
 - `config.py` — `LabConfig.load(dry_run=False)`: dotenv parser + env-var overrides; safe defaults in dry-run mode.
 - `models.py` — one `@dataclass` per table (`VirtualMachineRecord`, `AppServiceRecord`, `AKSRecord`, `AzureSQLRecord`, `APMRecord`); each has `.to_dict()` emitting ISO-8601 UTC `TimeGenerated`.
 - `time_window.py` — `generate_timestamps(backfill_minutes, interval_seconds, seed, now)` → sorted list of UTC datetimes.
@@ -38,8 +38,8 @@
 
 **Dry-run invocation** (no Azure creds required):
 ```
-$env:PYTHONPATH = "F:\Temp\azure-monitor-lab"
-python F:\Temp\azure-monitor-lab\generator\main.py --scenario all --dry-run --backfill-minutes 5 --seed 42
+$env:PYTHONPATH = "C:\path\to\azure-monitor-workshop"
+python C:\path\to\azure-monitor-workshop\generator\main.py --scenario all --dry-run --backfill-minutes 5 --seed 42
 ```
 
 **Key file paths:**
@@ -48,7 +48,7 @@ python F:\Temp\azure-monitor-lab\generator\main.py --scenario all --dry-run --ba
 - Config template: `config/lab.env.example`
 - Generator decision doc: `.squad/decisions/inbox/dozer-generator.md`
 
-**Windows note:** Always set `PYTHONPATH=F:\Temp\azure-monitor-lab` before running generator scripts; avoid Unicode non-ASCII characters in print statements (cp1252 encoding on Windows terminal).
+**Windows note:** Always set `PYTHONPATH=C:\path\to\azure-monitor-workshop` before running generator scripts; avoid Unicode non-ASCII characters in print statements (cp1252 encoding on Windows terminal).
 
 ### 2026-07-15 — errorrate determinism fix
 

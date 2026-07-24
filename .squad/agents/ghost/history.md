@@ -1,7 +1,7 @@
 # Ghost — History
 
 ## Seed Context
-- **Project:** azure-monitor-lab (requested by Daniel Mauser / @dmauser).
+- **Project:** azure-monitor-workshop (requested by Daniel Mauser / @dmauser).
 - **My scope:** pytest suite (config, time_window, scenarios, thresholds, payload_schema), seed/reseed/smoke-test scripts, and the two validation gates.
 - **Gate 1 (local):** az bicep build all modules, bicep lint, pytest, shellcheck (.sh), PSScriptAnalyzer (.ps1).
 - **Gate 2 (cloud):** what-if → deploy → seed → smoke-test confirms rows per `<Scenario>_CL` table + alert firing.

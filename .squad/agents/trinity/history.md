@@ -1,7 +1,7 @@
 # Trinity — History
 
 ## Seed Context
-- **Project:** azure-monitor-lab — Azure Monitor Observability Demo Lab (requested by Daniel Mauser / @dmauser).
+- **Project:** azure-monitor-workshop — Azure Monitor Observability Demo Lab (requested by Daniel Mauser / @dmauser).
 - **Stack:** Bicep (subscription scope), Python 3.11+ generator (azure-monitor-ingestion + DefaultAzureCredential), KQL, Azure Workbooks, scheduled-query alerts, bash + PowerShell scripts, pytest.
 - **Decisions:** live deploy · per-scenario custom tables (5) · region `southcentralus` · names from Bicep outputs.
 - **Source of truth:** `docs/Azure-Monitor-Observability-Workshop.pptx`, appendix slides 34–38 (5 scenarios).
