@@ -8,9 +8,33 @@ Authored for the **Azure Monitor Observability Workshop** · Daniel Mauser ([@dm
 
 ![Azure Monitor](https://img.shields.io/badge/Azure-Monitor-0078D4?logo=microsoftazure&logoColor=white) ![IaC: Bicep](https://img.shields.io/badge/IaC-Bicep-3178C6?logo=azurepipelines&logoColor=white) ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white) ![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f)
 
-**[📖 Hands-On Lab](docs/hands-on-lab.md)** · [📚 Documentation](#-documentation) · [🚀 Quickstart](#-quickstart) · [🏛 Architecture](#-architecture-summary)
+**[📖 Hands-On Lab](docs/hands-on-lab.md)** · [🧭 Overview](#-overview) · [📚 Documentation](#-documentation) · [🚀 Quickstart](#-quickstart) · [🏛 Architecture](#-architecture-summary)
 
 </div>
+
+---
+
+## 🧭 Overview
+
+This repository is a **self-contained, deploy-it-yourself lab** for learning modern Azure Monitor observability — end to end, with real infrastructure and realistic data, at negligible cost.
+
+Instead of connecting live production resources, it uses the **[Logs Ingestion API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview)** to push **synthetic telemetry** into custom Log Analytics tables. One deploy command provisions the full stack — a Data Collection Endpoint (DCE), five scenario-specific Data Collection Rules (DCRs), and custom `*_CL` tables — and a Python generator streams believable metrics you can query, visualize, and alert on immediately.
+
+**Why it exists**
+- 🎓 **Learn by doing** — practice KQL, workbooks, dashboards, and SLO alerting against data that behaves like a real environment.
+- 🧪 **Safe to break** — inject built-in anomalies on demand (CPU spikes, 5xx storms, CrashLoopBackOff, DTU exhaustion, error-rate breaches) to see alerts fire.
+- 💸 **Low cost & disposable** — no VMs or app workloads required for the core lab; tear the whole thing down with one command.
+- 🏗 **IaC-first** — everything is Bicep + scripts, so the deployment is reproducible and reviewable.
+
+**What you get**
+- **Five real-world scenarios** — Virtual Machines, App Service, AKS, Azure SQL, and Applications (APM) — each with its own table, workbook, and alert rules.
+- **A complete [Hands-On Lab](docs/hands-on-lab.md)** — workspace → governance policy → VM/app onboarding → golden-signals workbook → SLO-based alert with a live fire test.
+- **[Scenario Walkthroughs](docs/scenario-walkthroughs.md)** — a guided tour of each scenario: sample KQL, golden-signal queries, and the exact command to trigger an anomaly.
+- **Feature demos** — the Copilot Observability Agent, Service Health alerts, Azure Policy diagnostics, and a guest-metrics demo VM.
+
+**Who it's for** — cloud engineers, SREs, and workshop facilitators who want a fast, realistic Azure Monitor playground without touching production.
+
+> **New here?** Jump to the **[Hands-On Lab Guide](docs/hands-on-lab.md)** for the full end-to-end walkthrough, or skim the [Quickstart](#-quickstart) to deploy in minutes.
 
 ---
 
