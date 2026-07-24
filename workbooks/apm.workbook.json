@@ -1,0 +1,171 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# APM (Application Performance)\n\nMonitors application golden signals — request rate, error rate, latency percentiles, dependency failures, and exceptions — reading from **APM_CL**."
+      },
+      "name": "apm-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 3600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                }
+              ]
+            }
+          },
+          {
+            "id": "b2c3d4e5-0002-0002-0002-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          }
+        ]
+      },
+      "name": "parameters-item"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAPM_CL\n| where TimeGenerated >= ago(1h)\n| where ItemType == \"request\"\n| summarize\n    RequestCount = count(),\n    ReqPerMin    = count() / toint(_binSize / 1m)\n    by bin(TimeGenerated, _binSize), Resource, OperationName, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Request Rate (req/min) Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "apm-requests"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAPM_CL\n| where TimeGenerated >= ago(1h)\n| where ItemType == \"request\"\n| summarize\n    TotalRequests  = count(),\n    FailedRequests = countif(IsSuccess == false)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| extend ErrorRatePct = iff(TotalRequests > 0, round(FailedRequests * 100.0 / TotalRequests, 2), 0.0)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Error Rate % Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "apm-error-rate"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAPM_CL\n| where TimeGenerated >= ago(1h)\n| where ItemType == \"request\"\n| summarize\n    P50Ms = percentile(DurationMs, 50),\n    P95Ms = percentile(DurationMs, 95),\n    P99Ms = percentile(DurationMs, 99)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Latency P50 / P95 / P99 Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "apm-latency"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAPM_CL\n| where TimeGenerated >= ago(1h)\n| where ItemType == \"dependency\"\n| summarize\n    TotalCalls  = count(),\n    FailedCalls = countif(DependencySuccess == false),\n    AvgDepMs    = avg(DependencyDurationMs)\n    by bin(TimeGenerated, _binSize), Resource, DependencyType, DependencyTarget, Environment\n| extend DepFailRatePct = iff(TotalCalls > 0, round(FailedCalls * 100.0 / TotalCalls, 2), 0.0)\n| order by DepFailRatePct desc",
+        "size": 0,
+        "title": "Dependency Failure Rate",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "apm-dep-failures"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAPM_CL\n| where TimeGenerated >= ago(1h)\n| where ItemType == \"exception\"\n| summarize ExceptionCount = count()\n    by bin(TimeGenerated, _binSize), Resource, ExceptionType, Environment\n| order by ExceptionCount desc",
+        "size": 0,
+        "title": "Exceptions by Type Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "apm-exceptions"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

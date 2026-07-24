@@ -1,0 +1,88 @@
+// ============================================================
+// Scenario  : Virtual Machines (IaaS)
+// Table     : VirtualMachines_CL
+// Deck refs : Watch → CPU %, memory, disk space, IOPS, heartbeat
+//             Alerts → heartbeat lost, disk < 10%, CPU > 90%, availability SLO
+// ============================================================
+// Column contract (schema source of truth for DCR + generator):
+//   TimeGenerated      datetime  — Log Analytics injection timestamp
+//   Resource           string    — VM display name (e.g. "vm-prod-01")
+//   ResourceId         string    — full ARM resource ID
+//   Environment        string    — prod | staging | dev
+//   Region             string    — Azure region (e.g. "southcentralus")
+//   OSType             string    — Windows | Linux
+//   CpuPercent         real      — 0–100 processor utilisation
+//   MemoryAvailableMB  real      — available RAM in MB
+//   MemoryTotalMB      real      — total installed RAM in MB
+//   DiskName           string    — volume label ("C:" or "/dev/sda1")
+//   DiskFreePercent    real      — 0–100 free space on that volume
+//   NetworkInBytes     long      — bytes received in the sample interval
+//   NetworkOutBytes    long      — bytes sent in the sample interval
+// ============================================================
+
+
+// ── [1] Workbook: CPU % over time by Resource ────────────────
+// Workbook: renders as a time-chart; group by Resource for multi-VM overlay.
+let _timeRange = 1h;
+let _binSize   = 5m;
+VirtualMachines_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgCpu = avg(CpuPercent),
+    MaxCpu = max(CpuPercent),
+    P95Cpu = percentile(CpuPercent, 95)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| order by TimeGenerated asc
+
+
+// ── [2] Workbook: Memory utilisation over time ───────────────
+// Workbook: stacked area per VM; MemUsedPct is the primary signal.
+let _timeRange = 1h;
+let _binSize   = 5m;
+VirtualMachines_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgAvailMB = avg(MemoryAvailableMB),
+    AvgTotalMB = avg(MemoryTotalMB)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| extend MemUsedPct = round(100.0 - (AvgAvailMB / AvgTotalMB * 100.0), 1)
+| project TimeGenerated, Resource, Environment, MemUsedPct, AvgAvailMB, AvgTotalMB
+| order by TimeGenerated asc
+
+
+// ── [3] Workbook: Disk free % — current snapshot, flag <10% ──
+// Workbook: grid with conditional formatting; Severity drives row colour.
+let _timeRange = 1h;
+VirtualMachines_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize arg_max(TimeGenerated, DiskFreePercent) by Resource, DiskName, Environment
+| extend Severity = case(
+    DiskFreePercent < 10.0, "Critical",
+    DiskFreePercent < 20.0, "Warning",
+    "OK")
+| project Resource, DiskName, Environment, DiskFreePercent, Severity, LastReported = TimeGenerated
+| order by DiskFreePercent asc
+
+
+// ── [4] Workbook: Heartbeat / last-seen — detect missing > 5 min
+// Workbook: status grid; HeartbeatStatus = MISSING triggers a red badge.
+let _timeRange = 1h;
+let _missThresholdMin = 5;
+VirtualMachines_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize LastSeen = max(TimeGenerated) by Resource, Environment, Region
+| extend MinutesSilent = datetime_diff('minute', now(), LastSeen)
+| extend HeartbeatStatus = iff(MinutesSilent > _missThresholdMin, "MISSING", "OK")
+| project Resource, Environment, Region, LastSeen, MinutesSilent, HeartbeatStatus
+| order by HeartbeatStatus desc, MinutesSilent desc
+
+
+// ── [5] Alert: CPU > 90% sustained ───────────────────────────
+// Alert: fires when any Resource has avg CPU > 90% over the last 5-min bin.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, threshold = row count > 0.
+let _cpuThreshold = 90.0;
+VirtualMachines_CL
+| where TimeGenerated >= ago(5m)
+| summarize AvgCpu = avg(CpuPercent) by bin(TimeGenerated, 5m), Resource, Environment
+| where AvgCpu > _cpuThreshold
+| project TimeGenerated, Resource, Environment, AvgCpu

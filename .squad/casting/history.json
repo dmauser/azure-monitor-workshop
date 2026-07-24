@@ -1,0 +1,18 @@
+{
+  "universe_usage_history": [
+    { "universe": "The Matrix", "assigned_at": "2026-07-15", "assignment_id": "amlab-2026-07-15" }
+  ],
+  "assignment_cast_snapshots": {
+    "amlab-2026-07-15": {
+      "universe": "The Matrix",
+      "reason": "Observability/monitoring resonance — watching the system, operators, agents",
+      "cast": {
+        "trinity": "Lead / Architect",
+        "tank": "Infra / IaC Dev",
+        "dozer": "Backend / Data Dev",
+        "ghost": "Tester / QA",
+        "mouse": "Content & Docs"
+      }
+    }
+  }
+}

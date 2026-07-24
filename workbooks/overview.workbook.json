@@ -1,0 +1,131 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Azure Monitor Lab — Overview\n\nCross-scenario health roll-up reading from **VirtualMachines_CL**, **AppService_CL**, **AKS_CL**, **AzureSQL_CL**, and **APM_CL**. Shows table freshness, per-scenario headline signals, and active issues."
+      },
+      "name": "overview-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 3600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                }
+              ]
+            }
+          },
+          {
+            "id": "b2c3d4e5-0002-0002-0002-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          }
+        ]
+      },
+      "name": "parameters-item"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _checkWindow = 1h;\nunion\n    (VirtualMachines_CL | where TimeGenerated >= ago(_checkWindow)\n     | summarize RowCount = count(), LastRow = max(TimeGenerated)\n     | extend Scenario = \"VirtualMachines\"),\n    (AppService_CL | where TimeGenerated >= ago(_checkWindow)\n     | summarize RowCount = count(), LastRow = max(TimeGenerated)\n     | extend Scenario = \"AppService\"),\n    (AKS_CL | where TimeGenerated >= ago(_checkWindow)\n     | summarize RowCount = count(), LastRow = max(TimeGenerated)\n     | extend Scenario = \"AKS\"),\n    (AzureSQL_CL | where TimeGenerated >= ago(_checkWindow)\n     | summarize RowCount = count(), LastRow = max(TimeGenerated)\n     | extend Scenario = \"AzureSQL\"),\n    (APM_CL | where TimeGenerated >= ago(_checkWindow)\n     | summarize RowCount = count(), LastRow = max(TimeGenerated)\n     | extend Scenario = \"APM\")\n| extend MinutesSinceLastRow = datetime_diff('minute', now(), LastRow)\n| extend FreshnessStatus = case(\n    MinutesSinceLastRow <= 5,  \"Fresh\",\n    MinutesSinceLastRow <= 15, \"Stale\",\n    \"No data\")\n| project Scenario, RowCount, LastRow, MinutesSinceLastRow, FreshnessStatus\n| order by FreshnessStatus asc, Scenario asc",
+        "size": 0,
+        "title": "Table Freshness & Row Count",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "freshness-grid"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _window = 1h;\nunion\n    (VirtualMachines_CL | where TimeGenerated >= ago(_window)\n     | summarize Value = max(CpuPercent)\n     | extend Scenario = \"VirtualMachines\", Signal = \"Max CPU %\", Unit = \"%\"),\n    (AppService_CL | where TimeGenerated >= ago(_window)\n     | summarize Total5xx = sum(Http5xxCount), TotalReqs = sum(RequestCount)\n     | extend Value = iff(TotalReqs > 0, round(Total5xx * 100.0 / TotalReqs, 2), 0.0)\n     | extend Scenario = \"AppService\", Signal = \"5xx Error Rate\", Unit = \"%\"),\n    (AKS_CL | where TimeGenerated >= ago(_window)\n     | where PodReason == \"CrashLoopBackOff\"\n     | summarize Value = toreal(dcount(PodName))\n     | extend Scenario = \"AKS\", Signal = \"CrashLoopBackOff Pods\", Unit = \"count\"),\n    (AzureSQL_CL | where TimeGenerated >= ago(_window)\n     | summarize Value = max(DtuPercent)\n     | extend Scenario = \"AzureSQL\", Signal = \"Peak DTU %\", Unit = \"%\"),\n    (APM_CL | where TimeGenerated >= ago(_window) | where ItemType == \"request\"\n     | summarize Value = percentile(DurationMs, 95)\n     | extend Scenario = \"APM\", Signal = \"P95 Latency\", Unit = \"ms\")\n| project Scenario, Signal, Value, Unit\n| order by Scenario asc",
+        "size": 3,
+        "title": "Scenario Headline Signals (Last 1h)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "tiles"
+      },
+      "name": "signals-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _shortWindow = 5m;\nunion\n    (VirtualMachines_CL | where TimeGenerated >= ago(_shortWindow)\n     | summarize AvgCpu = avg(CpuPercent) by Resource, Environment\n     | where AvgCpu > 90.0\n     | extend Scenario = \"VirtualMachines\", Issue = \"CPU > 90%\",\n              ResourceName = Resource, Detail = strcat(\"AvgCpu=\", round(AvgCpu,1), \"%\")),\n    (VirtualMachines_CL | where TimeGenerated >= ago(_shortWindow)\n     | summarize LatestDiskFree = avg(DiskFreePercent) by Resource, DiskName, Environment\n     | where LatestDiskFree < 10.0\n     | extend Scenario = \"VirtualMachines\", Issue = \"Disk free < 10%\",\n              ResourceName = Resource, Detail = strcat(\"DiskFree=\", round(LatestDiskFree,1), \"%\")),\n    (AppService_CL | where TimeGenerated >= ago(_shortWindow)\n     | summarize Total5xx = sum(Http5xxCount), TotalReqs = sum(RequestCount)\n         by Resource, Environment\n     | where TotalReqs > 0 and Total5xx * 100.0 / TotalReqs > 5.0\n     | extend Scenario = \"AppService\", Issue = \"5xx rate > 5%\",\n              ResourceName = Resource,\n              Detail = strcat(\"5xxRate=\", round(Total5xx * 100.0 / TotalReqs, 1), \"%\")),\n    (AKS_CL | where TimeGenerated >= ago(_shortWindow)\n     | where PodReason == \"CrashLoopBackOff\"\n     | summarize MaxRestarts = max(PodRestartCount) by Resource, Namespace, PodName, Environment\n     | extend Scenario = \"AKS\", Issue = \"CrashLoopBackOff\",\n              ResourceName = strcat(Resource, \"/\", Namespace, \"/\", PodName),\n              Detail = strcat(\"Restarts=\", MaxRestarts)),\n    (AKS_CL | where TimeGenerated >= ago(_shortWindow)\n     | where NodeStatus == \"NotReady\"\n     | summarize Count = count() by Resource, NodeName, Environment\n     | extend Scenario = \"AKS\", Issue = \"Node NotReady\",\n              ResourceName = strcat(Resource, \"/\", NodeName),\n              Detail = \"NodeStatus=NotReady\"),\n    (AzureSQL_CL | where TimeGenerated >= ago(_shortWindow)\n     | summarize AvgDtu = avg(DtuPercent) by Resource, DatabaseName, Environment\n     | where AvgDtu > 85.0\n     | extend Scenario = \"AzureSQL\", Issue = \"DTU > 85%\",\n              ResourceName = strcat(Resource, \"/\", DatabaseName),\n              Detail = strcat(\"AvgDtu=\", round(AvgDtu,1), \"%\")),\n    (APM_CL | where TimeGenerated >= ago(_shortWindow)\n     | where ItemType == \"request\"\n     | summarize TotalReqs = count(), FailedReqs = countif(IsSuccess == false)\n         by Resource, Environment\n     | where TotalReqs > 0 and FailedReqs * 100.0 / TotalReqs > 1.0\n     | extend Scenario = \"APM\", Issue = \"Failure rate > 1%\",\n              ResourceName = Resource,\n              Detail = strcat(\"FailRate=\", round(FailedReqs * 100.0 / TotalReqs, 2), \"%\"))\n| project Scenario, Issue, ResourceName, Environment, Detail\n| order by Scenario asc, Issue asc",
+        "size": 0,
+        "title": "Active Issues",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "issues-grid"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

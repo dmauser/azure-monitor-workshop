@@ -1,0 +1,191 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# AKS / Containers\n\nMonitors Kubernetes cluster health — node/pod CPU, restarts, CrashLoopBackOff, node status, and PV usage — reading from **AKS_CL**."
+      },
+      "name": "aks-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 3600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                }
+              ]
+            }
+          },
+          {
+            "id": "b2c3d4e5-0002-0002-0002-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          }
+        ]
+      },
+      "name": "parameters-item"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAKS_CL\n| where TimeGenerated >= ago(1h)\n| where isnotempty(NodeName)\n| summarize\n    AvgNodeCpu    = avg(NodeCpuPercent),\n    MaxNodeCpu    = max(NodeCpuPercent),\n    AvgNodeMemPct = avg(NodeMemoryPercent)\n    by bin(TimeGenerated, _binSize), Resource, NodeName, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Node CPU & Memory % Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "aks-node-cpu"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AKS_CL\n| where TimeGenerated >= ago(1h)\n| where isnotempty(PodName)\n| summarize\n    AvgPodCpu    = avg(PodCpuPercent),\n    AvgPodMemPct = avg(PodMemoryPercent)\n    by Resource, Namespace, PodName, Environment\n| top 20 by AvgPodCpu desc",
+        "size": 0,
+        "title": "Top 20 Pods by CPU (Last 1h)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "aks-top-pods"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAKS_CL\n| where TimeGenerated >= ago(1h)\n| where isnotempty(PodName)\n| summarize MaxRestarts = max(PodRestartCount)\n    by bin(TimeGenerated, _binSize), Resource, Namespace, PodName, Environment\n| order by MaxRestarts desc",
+        "size": 0,
+        "title": "Pod Restarts Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "barchart"
+      },
+      "name": "aks-restarts"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AKS_CL\n| where TimeGenerated >= ago(1h)\n| where PodReason == \"CrashLoopBackOff\" or PodPhase == \"Failed\"\n| summarize\n    FirstSeen   = min(TimeGenerated),\n    LastSeen    = max(TimeGenerated),\n    MaxRestarts = max(PodRestartCount),\n    Occurrences = count()\n    by Resource, Namespace, PodName, PodReason, Environment\n| order by MaxRestarts desc",
+        "size": 0,
+        "title": "CrashLoopBackOff / Failed Pods",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "aks-crashloop"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AKS_CL\n| where TimeGenerated >= ago(1h)\n| where isnotempty(NodeName)\n| summarize LastReported = max(TimeGenerated), arg_max(TimeGenerated, NodeStatus)\n    by Resource, NodeName, Environment\n| extend IsNotReady = NodeStatus != \"Ready\"\n| project Resource, NodeName, Environment, NodeStatus, IsNotReady, LastReported\n| order by IsNotReady desc",
+        "size": 0,
+        "title": "Node Status",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "aks-node-status"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AKS_CL\n| where TimeGenerated >= ago(1h)\n| where isnotempty(PVName)\n| summarize AvgPVUsage = avg(PVUsagePercent), MaxPVUsage = max(PVUsagePercent)\n    by Resource, Namespace, PodName, PVName, Environment\n| extend Severity = case(\n    MaxPVUsage >= 90.0, \"Critical\",\n    MaxPVUsage >= 80.0, \"Warning\",\n    \"OK\")\n| order by MaxPVUsage desc",
+        "size": 0,
+        "title": "PersistentVolume Usage",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "aks-pv"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

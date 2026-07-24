@@ -1,0 +1,171 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Virtual Machines\n\nMonitors IaaS VM health — CPU, memory, disk, heartbeat, and network — reading from **VirtualMachines_CL**."
+      },
+      "name": "vm-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 3600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                }
+              ]
+            }
+          },
+          {
+            "id": "b2c3d4e5-0002-0002-0002-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          }
+        ]
+      },
+      "name": "parameters-item"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nVirtualMachines_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgCpu = avg(CpuPercent),\n    MaxCpu = max(CpuPercent),\n    P95Cpu = percentile(CpuPercent, 95)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "CPU % Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "vm-cpu"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nVirtualMachines_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgAvailMB = avg(MemoryAvailableMB),\n    AvgTotalMB = avg(MemoryTotalMB)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| extend MemUsedPct = round(100.0 - (AvgAvailMB / AvgTotalMB * 100.0), 1)\n| project TimeGenerated, Resource, Environment, MemUsedPct, AvgAvailMB, AvgTotalMB\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Memory Utilisation Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "vm-memory"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VirtualMachines_CL\n| where TimeGenerated >= ago(1h)\n| summarize arg_max(TimeGenerated, DiskFreePercent) by Resource, DiskName, Environment\n| extend Severity = case(\n    DiskFreePercent < 10.0, \"Critical\",\n    DiskFreePercent < 20.0, \"Warning\",\n    \"OK\")\n| project Resource, DiskName, Environment, DiskFreePercent, Severity, LastReported = TimeGenerated\n| order by DiskFreePercent asc",
+        "size": 0,
+        "title": "Disk Free % — Current Snapshot",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "vm-disk"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VirtualMachines_CL\n| where TimeGenerated >= ago(1h)\n| summarize LastSeen = max(TimeGenerated) by Resource, Environment, Region\n| extend MinutesSilent = datetime_diff('minute', now(), LastSeen)\n| extend HeartbeatStatus = iff(MinutesSilent > 5, \"MISSING\", \"OK\")\n| project Resource, Environment, Region, LastSeen, MinutesSilent, HeartbeatStatus\n| order by HeartbeatStatus desc, MinutesSilent desc",
+        "size": 0,
+        "title": "Heartbeat / Last-Seen Status",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "vm-heartbeat"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nVirtualMachines_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    TotalNetIn  = sum(NetworkInBytes),\n    TotalNetOut = sum(NetworkOutBytes)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Network In/Out (Bytes) Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "vm-network"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

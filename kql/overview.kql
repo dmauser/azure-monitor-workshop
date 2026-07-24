@@ -1,0 +1,143 @@
+// ============================================================
+// Scenario  : Cross-scenario health overview
+// Tables    : VirtualMachines_CL · AppService_CL · AKS_CL · AzureSQL_CL · APM_CL
+// Purpose   : Unified health roll-up for the workbook landing page.
+//             Three panels:
+//               A) Table freshness / row-count summary (data ingestion health)
+//               B) "Signals in the last 1 h" — key metric per scenario
+//               C) Active issues — rows that are currently in an alert state
+// ============================================================
+
+
+// ── [A] Table freshness & row-count roll-up ──────────────────
+// Workbook: confirms each table is actively receiving data; stale = ingestion gap.
+let _checkWindow = 1h;
+union
+    (VirtualMachines_CL | where TimeGenerated >= ago(_checkWindow)
+     | summarize RowCount = count(), LastRow = max(TimeGenerated)
+     | extend Scenario = "VirtualMachines"),
+    (AppService_CL | where TimeGenerated >= ago(_checkWindow)
+     | summarize RowCount = count(), LastRow = max(TimeGenerated)
+     | extend Scenario = "AppService"),
+    (AKS_CL | where TimeGenerated >= ago(_checkWindow)
+     | summarize RowCount = count(), LastRow = max(TimeGenerated)
+     | extend Scenario = "AKS"),
+    (AzureSQL_CL | where TimeGenerated >= ago(_checkWindow)
+     | summarize RowCount = count(), LastRow = max(TimeGenerated)
+     | extend Scenario = "AzureSQL"),
+    (APM_CL | where TimeGenerated >= ago(_checkWindow)
+     | summarize RowCount = count(), LastRow = max(TimeGenerated)
+     | extend Scenario = "APM")
+| extend MinutesSinceLastRow = datetime_diff('minute', now(), LastRow)
+| extend FreshnessStatus = case(
+    MinutesSinceLastRow <= 5,  "Fresh",
+    MinutesSinceLastRow <= 15, "Stale",
+    "No data")
+| project Scenario, RowCount, LastRow, MinutesSinceLastRow, FreshnessStatus
+| order by FreshnessStatus asc, Scenario asc
+
+
+// ── [B] Signals in the last 1 h — key metric per scenario ────
+// Workbook: KPI tiles showing the headline signal for each scenario.
+let _window = 1h;
+union
+    // VM: highest CPU across all VMs
+    (VirtualMachines_CL | where TimeGenerated >= ago(_window)
+     | summarize Value = max(CpuPercent)
+     | extend Scenario = "VirtualMachines", Signal = "Max CPU %", Unit = "%"),
+
+    // App Service: overall 5xx error rate
+    (AppService_CL | where TimeGenerated >= ago(_window)
+     | summarize Total5xx = sum(Http5xxCount), TotalReqs = sum(RequestCount)
+     | extend Value = iff(TotalReqs > 0, round(Total5xx * 100.0 / TotalReqs, 2), 0.0)
+     | extend Scenario = "AppService", Signal = "5xx Error Rate", Unit = "%"),
+
+    // AKS: count of pods in CrashLoopBackOff
+    (AKS_CL | where TimeGenerated >= ago(_window)
+     | where PodReason == "CrashLoopBackOff"
+     | summarize Value = toreal(dcount(PodName))
+     | extend Scenario = "AKS", Signal = "CrashLoopBackOff Pods", Unit = "count"),
+
+    // Azure SQL: peak DTU %
+    (AzureSQL_CL | where TimeGenerated >= ago(_window)
+     | summarize Value = max(DtuPercent)
+     | extend Scenario = "AzureSQL", Signal = "Peak DTU %", Unit = "%"),
+
+    // APM: P95 request latency
+    (APM_CL | where TimeGenerated >= ago(_window) | where ItemType == "request"
+     | summarize Value = percentile(DurationMs, 95)
+     | extend Scenario = "APM", Signal = "P95 Latency", Unit = "ms")
+| project Scenario, Signal, Value, Unit
+| order by Scenario asc
+
+
+// ── [C] Active issues — current alert conditions across all scenarios
+// Workbook: grid of live issues; non-empty = at least one scenario needs attention.
+let _shortWindow = 5m;
+union
+    // VM: CPU > 90%
+    (VirtualMachines_CL | where TimeGenerated >= ago(_shortWindow)
+     | summarize AvgCpu = avg(CpuPercent) by Resource, Environment
+     | where AvgCpu > 90.0
+     | extend Scenario = "VirtualMachines", Issue = "CPU > 90%",
+              ResourceName = Resource, Detail = strcat("AvgCpu=", round(AvgCpu,1), "%")),
+
+    // VM: disk free < 10%
+    (VirtualMachines_CL | where TimeGenerated >= ago(_shortWindow)
+     | summarize LatestDiskFree = avg(DiskFreePercent) by Resource, DiskName, Environment
+     | where LatestDiskFree < 10.0
+     | extend Scenario = "VirtualMachines", Issue = "Disk free < 10%",
+              ResourceName = Resource, Detail = strcat("DiskFree=", round(LatestDiskFree,1), "%")),
+
+    // VM: heartbeat missing > 5 min
+    (VirtualMachines_CL
+     | summarize LastSeen = max(TimeGenerated) by Resource, Environment
+     | where (now() - LastSeen) > 5m
+     | extend Scenario = "VirtualMachines", Issue = "Heartbeat missing > 5 min",
+              ResourceName = Resource,
+              Detail = strcat("LastSeen=", format_datetime(LastSeen, "HH:mm:ss"))),
+
+    // App Service: 5xx rate > 5%
+    (AppService_CL | where TimeGenerated >= ago(_shortWindow)
+     | summarize Total5xx = sum(Http5xxCount), TotalReqs = sum(RequestCount)
+         by Resource, Environment
+     | where TotalReqs > 0 and Total5xx * 100.0 / TotalReqs > 5.0
+     | extend Scenario = "AppService", Issue = "5xx rate > 5%",
+              ResourceName = Resource,
+              Detail = strcat("5xxRate=", round(Total5xx * 100.0 / TotalReqs, 1), "%")),
+
+    // AKS: CrashLoopBackOff
+    (AKS_CL | where TimeGenerated >= ago(_shortWindow)
+     | where PodReason == "CrashLoopBackOff"
+     | summarize MaxRestarts = max(PodRestartCount) by Resource, Namespace, PodName, Environment
+     | extend Scenario = "AKS", Issue = "CrashLoopBackOff",
+              ResourceName = strcat(Resource, "/", Namespace, "/", PodName),
+              Detail = strcat("Restarts=", MaxRestarts)),
+
+    // AKS: node NotReady
+    (AKS_CL | where TimeGenerated >= ago(_shortWindow)
+     | where NodeStatus == "NotReady"
+     | summarize Count = count() by Resource, NodeName, Environment
+     | extend Scenario = "AKS", Issue = "Node NotReady",
+              ResourceName = strcat(Resource, "/", NodeName),
+              Detail = "NodeStatus=NotReady"),
+
+    // Azure SQL: DTU > 85%
+    (AzureSQL_CL | where TimeGenerated >= ago(_shortWindow)
+     | summarize AvgDtu = avg(DtuPercent) by Resource, DatabaseName, Environment
+     | where AvgDtu > 85.0
+     | extend Scenario = "AzureSQL", Issue = "DTU > 85%",
+              ResourceName = strcat(Resource, "/", DatabaseName),
+              Detail = strcat("AvgDtu=", round(AvgDtu,1), "%")),
+
+    // APM: error rate > 1%
+    (APM_CL | where TimeGenerated >= ago(_shortWindow)
+     | where ItemType == "request"
+     | summarize TotalReqs = count(), FailedReqs = countif(IsSuccess == false)
+         by Resource, Environment
+     | where TotalReqs > 0 and FailedReqs * 100.0 / TotalReqs > 1.0
+     | extend Scenario = "APM", Issue = "Failure rate > 1%",
+              ResourceName = Resource,
+              Detail = strcat("FailRate=", round(FailedReqs * 100.0 / TotalReqs, 2), "%"))
+| project Scenario, Issue, ResourceName, Environment, Detail
+| order by Scenario asc, Issue asc

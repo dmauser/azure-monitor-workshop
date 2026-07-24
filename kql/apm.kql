@@ -1,0 +1,166 @@
+// ============================================================
+// Scenario  : Applications (APM)
+// Table     : APM_CL
+// Deck refs : Watch → golden signals (rate, errors, latency P50/95/99),
+//                     dependencies, exceptions, traces
+//             Alerts → failure-rate, P95 latency, dependency failures,
+//                      availability, error-budget burn
+// ============================================================
+// Column contract (schema source of truth for DCR + generator):
+//   NOTE: APM_CL stores INDIVIDUAL REQUEST / SPAN events, not pre-aggregated metrics.
+//         One row = one telemetry event (request, dependency call, or exception).
+//         KQL queries aggregate to derive golden signals.
+//
+//   TimeGenerated        datetime  — event timestamp
+//   Resource             string    — service/app name (e.g. "svc-checkout")
+//   ResourceId           string    — full ARM resource ID
+//   Environment          string    — prod | staging | dev
+//   Region               string    — Azure region
+//   ItemType             string    — request | dependency | exception | trace
+//   OperationName        string    — HTTP route or function name (e.g. "GET /api/orders")
+//   DurationMs           real      — end-to-end duration in ms (0 for exceptions/traces)
+//   IsSuccess            bool      — true = 2xx/success; false = 4xx/5xx/failure
+//   ExceptionType        string    — exception class name (empty if not an exception)
+//   ExceptionMessage     string    — exception message text (empty if not an exception)
+//   DependencyType       string    — HTTP | SQL | ServiceBus | Redis | ... (empty if not a dep)
+//   DependencyTarget     string    — dependency endpoint / connection string host
+//   DependencySuccess    bool      — dependency call succeeded
+//   DependencyDurationMs real      — dependency call duration ms
+//   SeverityLevel        int       — 0=verbose 1=info 2=warning 3=error 4=critical (trace rows)
+//   TraceId              string    — W3C trace-id
+//   SpanId               string    — W3C span-id
+// ============================================================
+
+
+// ── [1] Workbook: Request rate (requests/min) over time ───────
+// Workbook: total request throughput trend; drop = availability concern.
+let _timeRange = 1h;
+let _binSize   = 5m;
+APM_CL
+| where TimeGenerated >= ago(_timeRange)
+| where ItemType == "request"
+| summarize
+    RequestCount = count(),
+    ReqPerMin    = count() / toint(_binSize / 1m)
+    by bin(TimeGenerated, _binSize), Resource, OperationName, Environment
+| order by TimeGenerated asc
+
+
+// ── [2] Workbook: Error rate % over time ─────────────────────
+// Workbook: failure rate trend; > 1% SLO breach drives error-budget burn.
+let _timeRange = 1h;
+let _binSize   = 5m;
+APM_CL
+| where TimeGenerated >= ago(_timeRange)
+| where ItemType == "request"
+| summarize
+    TotalRequests  = count(),
+    FailedRequests = countif(IsSuccess == false)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| extend ErrorRatePct = iff(TotalRequests > 0, round(FailedRequests * 100.0 / TotalRequests, 2), 0.0)
+| order by TimeGenerated asc
+
+
+// ── [3] Workbook: Latency P50 / P95 / P99 over time ──────────
+// Workbook: latency percentile trends; SLO = P95 < 500 ms.
+let _timeRange = 1h;
+let _binSize   = 5m;
+APM_CL
+| where TimeGenerated >= ago(_timeRange)
+| where ItemType == "request"
+| summarize
+    P50Ms = percentile(DurationMs, 50),
+    P95Ms = percentile(DurationMs, 95),
+    P99Ms = percentile(DurationMs, 99)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| order by TimeGenerated asc
+
+
+// ── [4] Workbook: Latency P50/P95/P99 — make-series for anomaly detection
+// Workbook: time-series array for anomaly detection via series_decompose_anomalies().
+let _timeRange = 6h;
+let _binSize   = 5m;
+APM_CL
+| where TimeGenerated >= ago(_timeRange)
+| where ItemType == "request"
+| make-series
+    P95Ms = percentile(DurationMs, 95)
+    on TimeGenerated from ago(_timeRange) to now() step _binSize
+    by Resource, Environment
+| extend anomalies = series_decompose_anomalies(P95Ms)
+
+
+// ── [5] Workbook: Dependency failure rate ────────────────────
+// Workbook: downstream health by DependencyType + DependencyTarget.
+let _timeRange = 1h;
+let _binSize   = 5m;
+APM_CL
+| where TimeGenerated >= ago(_timeRange)
+| where ItemType == "dependency"
+| summarize
+    TotalCalls  = count(),
+    FailedCalls = countif(DependencySuccess == false),
+    AvgDepMs    = avg(DependencyDurationMs)
+    by bin(TimeGenerated, _binSize), Resource, DependencyType, DependencyTarget, Environment
+| extend DepFailRatePct = iff(TotalCalls > 0, round(FailedCalls * 100.0 / TotalCalls, 2), 0.0)
+| order by DepFailRatePct desc
+
+
+// ── [6] Workbook: Exceptions by type ─────────────────────────
+// Workbook: top exception types; spikes indicate regression or outage.
+let _timeRange = 1h;
+let _binSize   = 5m;
+APM_CL
+| where TimeGenerated >= ago(_timeRange)
+| where ItemType == "exception"
+| summarize ExceptionCount = count()
+    by bin(TimeGenerated, _binSize), Resource, ExceptionType, Environment
+| order by ExceptionCount desc
+
+
+// ── [7] Alert: Failure rate > 1% over 5-min window ───────────
+// Alert: fires when request error rate exceeds 1% in last 5 min.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+let _failRateThreshold = 1.0;
+APM_CL
+| where TimeGenerated >= ago(5m)
+| where ItemType == "request"
+| summarize
+    TotalReqs  = count(),
+    FailedReqs = countif(IsSuccess == false)
+    by bin(TimeGenerated, 5m), Resource, Environment
+| where TotalReqs > 0
+| extend ErrorRatePct = FailedReqs * 100.0 / TotalReqs
+| where ErrorRatePct > _failRateThreshold
+| project TimeGenerated, Resource, Environment, TotalReqs, FailedReqs, ErrorRatePct
+
+
+// ── [8] Alert: P95 latency SLO breach > 500 ms ───────────────
+// Alert: fires when P95 request latency exceeds 500 ms in last 5 min.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+let _p95Threshold = 500.0;   // ms — align with your SLO
+APM_CL
+| where TimeGenerated >= ago(5m)
+| where ItemType == "request"
+| summarize P95Ms = percentile(DurationMs, 95)
+    by bin(TimeGenerated, 5m), Resource, Environment
+| where P95Ms > _p95Threshold
+| project TimeGenerated, Resource, Environment, P95Ms
+
+
+// ── [9] Alert: Error-budget burn — rolling 1h failure rate > 2%
+// Alert: fires when rolling 1-hour error rate exceeds 2x the 1% SLO threshold,
+//        indicating fast error-budget burn.
+// Scheduled-query rule: frequency = 5m, lookback = 60m, row count > 0.
+let _errorBudgetThreshold = 2.0;
+APM_CL
+| where TimeGenerated >= ago(60m)
+| where ItemType == "request"
+| summarize
+    TotalReqs  = count(),
+    FailedReqs = countif(IsSuccess == false)
+    by bin(TimeGenerated, 60m), Resource, Environment
+| where TotalReqs > 0
+| extend RollingErrorRatePct = FailedReqs * 100.0 / TotalReqs
+| where RollingErrorRatePct > _errorBudgetThreshold
+| project TimeGenerated, Resource, Environment, TotalReqs, FailedReqs, RollingErrorRatePct

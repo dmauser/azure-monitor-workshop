@@ -1,0 +1,134 @@
+// ============================================================
+// Scenario  : Azure SQL / Databases
+// Table     : AzureSQL_CL
+// Deck refs : Watch → DTU/vCore %, CPU, connections, deadlocks, storage %, query duration
+//             Alerts → high DTU/CPU, storage near cap, connection failures,
+//                      deadlocks, query-latency SLO
+// ============================================================
+// Column contract (schema source of truth for DCR + generator):
+//   TimeGenerated      datetime  — Log Analytics injection timestamp
+//   Resource           string    — logical server name (e.g. "sql-prod-01")
+//   ResourceId         string    — full ARM resource ID
+//   Environment        string    — prod | staging | dev
+//   Region             string    — Azure region
+//   DatabaseName       string    — database name within the server
+//   DtuPercent         real      — DTU consumption 0–100
+//   CpuPercent         real      — CPU utilisation 0–100 (for vCore models)
+//   WorkerPercent      real      — worker thread utilisation 0–100
+//   ActiveConnections  int       — current active connection count
+//   FailedConnections  int       — failed connection attempts in interval
+//   DeadlockCount      int       — deadlocks detected in interval
+//   StoragePercent     real      — database storage used 0–100
+//   StorageUsedMB      long      — storage used in MB
+//   StorageLimitMB     long      — storage limit in MB
+//   QueryDurationMs    real      — mean query duration (ms) in interval
+//   QueryDurationP95Ms real      — P95 query duration (ms) — pre-computed by generator
+// ============================================================
+
+
+// ── [1] Workbook: DTU / CPU % over time ──────────────────────
+// Workbook: dual-line chart (DtuPercent + CpuPercent); shows capacity headroom.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AzureSQL_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgDtu    = avg(DtuPercent),
+    MaxDtu    = max(DtuPercent),
+    AvgCpu    = avg(CpuPercent),
+    MaxCpu    = max(CpuPercent),
+    P95Worker = percentile(WorkerPercent, 95)
+    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment
+| order by TimeGenerated asc
+
+
+// ── [2] Workbook: Active connections over time ────────────────
+// Workbook: active vs failed connections; spike in FailedConnections = pool exhaustion.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AzureSQL_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgActiveConn  = avg(ActiveConnections),
+    MaxActiveConn  = max(ActiveConnections),
+    TotalFailedConn = sum(FailedConnections)
+    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment
+| order by TimeGenerated asc
+
+
+// ── [3] Workbook: Deadlocks over time ────────────────────────
+// Workbook: bar chart of deadlock count per database; any deadlock = investigate.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AzureSQL_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize TotalDeadlocks = sum(DeadlockCount)
+    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment
+| where TotalDeadlocks > 0
+| order by TotalDeadlocks desc
+
+
+// ── [4] Workbook: Storage utilisation ────────────────────────
+// Workbook: current storage % per database; > 80% triggers warning badge.
+let _timeRange = 1h;
+AzureSQL_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize arg_max(TimeGenerated, StoragePercent, StorageUsedMB, StorageLimitMB)
+    by Resource, DatabaseName, Environment
+| extend Severity = case(
+    StoragePercent >= 90.0, "Critical",
+    StoragePercent >= 80.0, "Warning",
+    "OK")
+| project Resource, DatabaseName, Environment,
+          StoragePercent, StorageUsedMB, StorageLimitMB, Severity,
+          LastReported = TimeGenerated
+| order by StoragePercent desc
+
+
+// ── [5] Workbook: Query duration P95 over time ───────────────
+// Workbook: P95 latency trend; SLO breach = P95 > 1 000 ms for 2+ consecutive bins.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AzureSQL_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgQueryMs = avg(QueryDurationMs),
+    MaxP95Ms   = max(QueryDurationP95Ms)
+    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment
+| extend SloBreached = MaxP95Ms > 1000.0
+| order by TimeGenerated asc
+
+
+// ── [6] Alert: High DTU — avg > 85% over 5-min bin ───────────
+// Alert: fires when avg DTU exceeds 85% in the last 5-min window.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+let _dtuThreshold = 85.0;
+AzureSQL_CL
+| where TimeGenerated >= ago(5m)
+| summarize AvgDtu = avg(DtuPercent)
+    by bin(TimeGenerated, 5m), Resource, DatabaseName, Environment
+| where AvgDtu > _dtuThreshold
+| project TimeGenerated, Resource, DatabaseName, Environment, AvgDtu
+
+
+// ── [7] Alert: Storage near capacity — > 90% ─────────────────
+// Alert: fires when any database storage exceeds 90% in the last 5-min window.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+let _storageThreshold = 90.0;
+AzureSQL_CL
+| where TimeGenerated >= ago(5m)
+| summarize MaxStoragePct = max(StoragePercent)
+    by bin(TimeGenerated, 5m), Resource, DatabaseName, Environment
+| where MaxStoragePct > _storageThreshold
+| project TimeGenerated, Resource, DatabaseName, Environment, MaxStoragePct
+
+
+// ── [8] Alert: Deadlocks detected in last 5 min ──────────────
+// Alert: fires when any deadlock is detected in the last 5-min window.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+AzureSQL_CL
+| where TimeGenerated >= ago(5m)
+| summarize TotalDeadlocks = sum(DeadlockCount)
+    by bin(TimeGenerated, 5m), Resource, DatabaseName, Environment
+| where TotalDeadlocks > 0
+| project TimeGenerated, Resource, DatabaseName, Environment, TotalDeadlocks

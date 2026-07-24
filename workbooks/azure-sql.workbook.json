@@ -1,0 +1,171 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Azure SQL\n\nMonitors database health — DTU/CPU, connections, deadlocks, storage, and query latency — reading from **AzureSQL_CL**."
+      },
+      "name": "sql-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 3600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                }
+              ]
+            }
+          },
+          {
+            "id": "b2c3d4e5-0002-0002-0002-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          }
+        ]
+      },
+      "name": "parameters-item"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAzureSQL_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgDtu    = avg(DtuPercent),\n    MaxDtu    = max(DtuPercent),\n    AvgCpu    = avg(CpuPercent),\n    MaxCpu    = max(CpuPercent),\n    P95Worker = percentile(WorkerPercent, 95)\n    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "DTU / CPU % Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "sql-dtu"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAzureSQL_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgActiveConn   = avg(ActiveConnections),\n    MaxActiveConn   = max(ActiveConnections),\n    TotalFailedConn = sum(FailedConnections)\n    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Active & Failed Connections Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "sql-connections"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAzureSQL_CL\n| where TimeGenerated >= ago(1h)\n| summarize TotalDeadlocks = sum(DeadlockCount)\n    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment\n| where TotalDeadlocks > 0\n| order by TotalDeadlocks desc",
+        "size": 0,
+        "title": "Deadlocks Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "barchart"
+      },
+      "name": "sql-deadlocks"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureSQL_CL\n| where TimeGenerated >= ago(1h)\n| summarize arg_max(TimeGenerated, StoragePercent, StorageUsedMB, StorageLimitMB)\n    by Resource, DatabaseName, Environment\n| extend Severity = case(\n    StoragePercent >= 90.0, \"Critical\",\n    StoragePercent >= 80.0, \"Warning\",\n    \"OK\")\n| project Resource, DatabaseName, Environment,\n          StoragePercent, StorageUsedMB, StorageLimitMB, Severity,\n          LastReported = TimeGenerated\n| order by StoragePercent desc",
+        "size": 0,
+        "title": "Storage Utilisation — Current Snapshot",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "grid"
+      },
+      "name": "sql-storage"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAzureSQL_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgQueryMs = avg(QueryDurationMs),\n    MaxP95Ms   = max(QueryDurationP95Ms)\n    by bin(TimeGenerated, _binSize), Resource, DatabaseName, Environment\n| extend SloBreached = MaxP95Ms > 1000.0\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Query Duration P95 Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "sql-query-latency"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,0 +1,10 @@
+# Azure SDK — identity + ingestion + query
+azure-identity>=1.16.0
+azure-monitor-ingestion>=1.0.3
+azure-monitor-query>=1.3.0
+
+# Utility
+python-dateutil>=2.9.0
+
+# Testing
+pytest>=8.1.0

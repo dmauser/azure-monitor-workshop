@@ -1,0 +1,171 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# App Service\n\nMonitors PaaS application health — requests, latency, error rate, restarts, and plan utilisation — reading from **AppService_CL**."
+      },
+      "name": "app-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 3600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                }
+              ]
+            }
+          },
+          {
+            "id": "b2c3d4e5-0002-0002-0002-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          }
+        ]
+      },
+      "name": "parameters-item"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAppService_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    TotalRequests = sum(RequestCount),\n    ReqPerMin     = sum(RequestCount) / toint(_binSize / 1m)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Request Rate Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "app-requests"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAppService_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgResponseMs = avg(ResponseTimeMs),\n    MaxP95Ms      = max(ResponseTimeP95Ms)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "P95 Response Time Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "app-latency"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAppService_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    Total5xx  = sum(Http5xxCount),\n    TotalReqs = sum(RequestCount)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| extend ErrorRatePct = iff(TotalReqs > 0, round(Total5xx * 100.0 / TotalReqs, 2), 0.0)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "HTTP 5xx Error Rate (%)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "app-errors"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAppService_CL\n| where TimeGenerated >= ago(1h)\n| summarize TotalRestarts = sum(RestartCount)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| extend IsStorm = TotalRestarts >= 3\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "App Restarts Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "barchart"
+      },
+      "name": "app-restarts"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _binSize = 5m;\nAppService_CL\n| where TimeGenerated >= ago(1h)\n| summarize\n    AvgPlanCpu = avg(PlanCpuPercent),\n    AvgPlanMem = avg(PlanMemoryPercent)\n    by bin(TimeGenerated, _binSize), Resource, Environment\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "App Service Plan CPU & Memory %",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "timeContext": {
+          "durationMs": 3600000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "visualization": "timechart"
+      },
+      "name": "app-plan"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

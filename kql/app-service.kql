@@ -1,0 +1,117 @@
+// ============================================================
+// Scenario  : App Service / PaaS
+// Table     : AppService_CL
+// Deck refs : Watch → requests, response time, HTTP 5xx/4xx, restarts, plan CPU/mem
+//             Alerts → 5xx spike, P95 latency SLO breach, availability-test failure,
+//                      restart storms
+// ============================================================
+// Column contract (schema source of truth for DCR + generator):
+//   TimeGenerated      datetime  — Log Analytics injection timestamp
+//   Resource           string    — App Service name (e.g. "app-prod-api")
+//   ResourceId         string    — full ARM resource ID
+//   Environment        string    — prod | staging | dev
+//   Region             string    — Azure region
+//   AppName            string    — logical application name (may differ from Resource slot)
+//   RequestCount       long      — total HTTP requests in sample interval
+//   ResponseTimeMs     real      — mean response time (ms) in interval
+//   ResponseTimeP95Ms  real      — P95 response time (ms) — pre-computed by generator
+//   Http2xxCount       long      — 2xx responses in interval
+//   Http4xxCount       long      — 4xx responses in interval
+//   Http5xxCount       long      — 5xx responses in interval
+//   RestartCount       int       — number of app restarts in interval
+//   PlanCpuPercent     real      — App Service Plan CPU %
+//   PlanMemoryPercent  real      — App Service Plan memory %
+// ============================================================
+
+
+// ── [1] Workbook: Request rate over time ─────────────────────
+// Workbook: requests-per-minute time chart; reveals traffic spikes / drops.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AppService_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    TotalRequests = sum(RequestCount),
+    ReqPerMin     = sum(RequestCount) / toint(_binSize / 1m)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| order by TimeGenerated asc
+
+
+// ── [2] Workbook: P95 response time over time ────────────────
+// Workbook: latency trend; overlay AvgResponseTime and P95 on same axis.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AppService_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgResponseMs = avg(ResponseTimeMs),
+    MaxP95Ms      = max(ResponseTimeP95Ms)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| order by TimeGenerated asc
+
+
+// ── [3] Workbook: HTTP 5xx error rate ────────────────────────
+// Workbook: 5xx rate % and absolute count; shows error budget consumption.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AppService_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    Total5xx    = sum(Http5xxCount),
+    TotalReqs   = sum(RequestCount)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| extend ErrorRatePct = iff(TotalReqs > 0, round(Total5xx * 100.0 / TotalReqs, 2), 0.0)
+| order by TimeGenerated asc
+
+
+// ── [4] Workbook: Restart count ──────────────────────────────
+// Workbook: bar chart of restarts per resource per time bin; restart storms = ≥3 in 15 min.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AppService_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize TotalRestarts = sum(RestartCount)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| extend IsStorm = TotalRestarts >= 3
+| order by TimeGenerated asc
+
+
+// ── [5] Workbook: Plan CPU & Memory utilisation ───────────────
+// Workbook: resource pressure on the hosting plan; helps right-size SKU.
+let _timeRange = 1h;
+let _binSize   = 5m;
+AppService_CL
+| where TimeGenerated >= ago(_timeRange)
+| summarize
+    AvgPlanCpu = avg(PlanCpuPercent),
+    AvgPlanMem = avg(PlanMemoryPercent)
+    by bin(TimeGenerated, _binSize), Resource, Environment
+| order by TimeGenerated asc
+
+
+// ── [6] Alert: 5xx spike — rate > 5% over 5-min window ───────
+// Alert: fires when Http5xxCount / RequestCount > 5% in the last 5 min.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+let _errorRateThreshold = 5.0;
+AppService_CL
+| where TimeGenerated >= ago(5m)
+| summarize
+    Total5xx  = sum(Http5xxCount),
+    TotalReqs = sum(RequestCount)
+    by bin(TimeGenerated, 5m), Resource, Environment
+| where TotalReqs > 0
+| extend ErrorRatePct = Total5xx * 100.0 / TotalReqs
+| where ErrorRatePct > _errorRateThreshold
+| project TimeGenerated, Resource, Environment, Total5xx, TotalReqs, ErrorRatePct
+
+
+// ── [7] Alert: P95 latency SLO breach > 2 000 ms ─────────────
+// Alert: fires when max P95 response time exceeds 2 000 ms in a 5-min bin.
+// Scheduled-query rule: frequency = 5m, lookback = 5m, row count > 0.
+let _p95Threshold = 2000.0;   // ms — adjust to match your SLO
+AppService_CL
+| where TimeGenerated >= ago(5m)
+| summarize MaxP95Ms = max(ResponseTimeP95Ms)
+    by bin(TimeGenerated, 5m), Resource, Environment
+| where MaxP95Ms > _p95Threshold
+| project TimeGenerated, Resource, Environment, MaxP95Ms
